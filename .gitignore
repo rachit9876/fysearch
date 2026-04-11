@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Data & Runtime
+data/db/
+data/store/
+data/index/
+data/uploads/
+data/input/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Removed files (dev notes, not needed)
+idea.txt
+mySystem.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (optional - uncomment if you want to ignore local configs)
+# fysearch.config.json

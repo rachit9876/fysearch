@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FYSearch — Multimodal Forensic Search</title>
+  <meta name="description" content="FYSearch: CPU-only offline multimodal forensic search engine. Search images, PDFs, and documents by text or image." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <style>
+    /* ── Design Tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg-base: #09090b;
+      --bg-card: #18181b;
+      --bg-elevated: #1f1f23;
+      --bg-hover: #27272a;
+      --bg-glass: rgba(24, 24, 27, 0.72);
+
+      --accent: #f59e0b;
+      --accent-dim: rgba(245, 158, 11, 0.15);
+      --accent-glow: rgba(245, 158, 11, 0.35);
+      --accent-hover: #fbbf24;
+
+      --cyan: #22d3ee;
+      --cyan-dim: rgba(34, 211, 238, 0.12);
+
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #52525b;
+
+      --border: #27272a;
+      --border-subtle: #3f3f46;
+
+      --success: #22c55e;
+      --success-bg: rgba(34, 197, 94, 0.12);
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.12);
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --radius-full: 9999px;
+
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+      --shadow-md: 0 4px 16px rgba(0,0,0,.4);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.5);
+      --shadow-glow: 0 0 40px var(--accent-glow);
+
+      --transition: 200ms cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ─────────────────────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+
+    .brand-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), #d97706);
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #000;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .brand h1 {
+      font-size: 20px; font-weight: 600; letter-spacing: -0.3px;
+    }
+
+    .brand-sub {
+      font-size: 11px; color: var(--text-muted); font-weight: 400;
+    }
+
+    .status-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .chip {
+      font-size: 12px; font-weight: 500;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    .chip.ready { background: var(--success-bg); color: var(--success); border-color: rgba(34,197,94,.3); }
+    .chip.missing { background: var(--error-bg); color: var(--error); border-color: rgba(239,68,68,.2); }
+
+    /* ── Page Container ─────────────────────────────────────────────── */
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ── Banners ────────────────────────────────────────────────────── */
+    .banner {
+      padding: 14px 20px;
+      border-radius: var(--radius-md);
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 14px; font-weight: 500;
+      animation: slideDown .3s ease;
+    }
+
+    .banner .material-icons-round { font-size: 20px; }
+
+    .banner.error {
+      background: var(--error-bg);
+      color: var(--error);
+      border: 1px solid rgba(239,68,68,.2);
+    }
+
+    .banner.ok {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(34,197,94,.2);
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1100px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    /* ── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      transition: border-color var(--transition);
+    }
+
+    .card:hover { border-color: var(--border-subtle); }
+
+    .card-title {
+      font-size: 15px; font-weight: 600; color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .card-title .material-icons-round {
+      font-size: 18px; color: var(--accent);
+    }
+
+    /* ── Hero ───────────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 56px 24px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -100px; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-title {
+      font-size: 44px; font-weight: 700;
+      background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -1px;
+      position: relative;
+    }
+
+    .hero-sub {
+      font-size: 15px; color: var(--text-muted);
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    /* ── Tabs ───────────────────────────────────────────────────────── */
+    .tabs {
+      display: inline-flex;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      padding: 3px;
+      position: relative;
+    }
+
+    .tab {
+      padding: 10px 28px;
+      border-radius: var(--radius-full);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-weight: 500; font-size: 14px;
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .tab .material-icons-round { font-size: 18px; }
+
+    .tab[aria-selected="true"] {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .tab:not([aria-selected="true"]):hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    /* ── Search Card ───────────────────────────────────────────────── */
+    .search-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .searchbar {
+      display: flex; gap: 12px; align-items: center;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 15px;
+      outline: none;
+      transition: all var(--transition);
+    }
+
+    input::placeholder { color: var(--text-muted); }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23a1a1aa' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      padding-right: 40px;
+    }
+
+    label {
+      display: block;
+      margin-top: 14px; margin-bottom: 6px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Buttons ────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px;
+      padding: 12px 24px;
+      border-radius: var(--radius-full);
+      border: none;
+      font-family: inherit;
+      font-weight: 600; font-size: 14px;
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn .material-icons-round { font-size: 18px; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #d97706);
+      color: #000;
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .btn-danger {
+      background: var(--error-bg);
+      color: var(--error);
+      border: 1px solid rgba(239,68,68,.2);
+    }
+
+    .btn-danger:hover { background: rgba(239,68,68,.2); }
+
+    .btn-block { width: 100%; }
+
+    /* ── Dropzone ───────────────────────────────────────────────────── */
+    .dropzone {
+      border: 2px dashed var(--border-subtle);
+      border-radius: var(--radius-lg);
+      background: var(--bg-elevated);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+    }
+
+    .dropzone:hover,
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      box-shadow: inset 0 0 40px var(--accent-dim);
+    }
+
+    .dropzone-icon {
+      font-size: 48px;
+      color: var(--accent);
+      margin-bottom: 12px;
+      transition: transform var(--transition);
+    }
+
+    .dropzone:hover .dropzone-icon { transform: translateY(-4px); }
+
+    .dropzone-title {
+      font-size: 16px; font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .dropzone-hint {
+      font-size: 13px; color: var(--text-muted);
+    }
+
+    .preview-img {
+      max-width: 280px; max-height: 200px;
+      object-fit: contain;
+      border-radius: var(--radius-md);
+      margin: 16px auto 0;
+      display: none;
+      border: 1px solid var(--border);
+    }
+
+    .preview-status {
+      font-size: 13px; color: var(--text-secondary);
+      margin-top: 10px;
+    }
+
+    /* ── Advanced Options (Collapsible) ─────────────────────────────── */
+    details {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 500; font-size: 14px;
+      color: var(--text-secondary);
+      padding: 12px 16px;
+      background: var(--bg-elevated);
+      list-style: none;
+      display: flex; align-items: center; gap: 6px;
+      transition: color var(--transition);
+    }
+
+    summary:hover { color: var(--text-primary); }
+    summary::-webkit-details-marker { display: none; }
+
+    summary::before {
+      content: '\e5cf';
+      font-family: 'Material Icons Round';
+      font-size: 18px;
+      transition: transform var(--transition);
+    }
+
+    details[open] summary::before { transform: rotate(180deg); }
+
+    .advanced-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .advanced-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Results ────────────────────────────────────────────────────── */
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .results-title {
+      font-size: 18px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .results-count {
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-elevated);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+    }
+
+    /* Image grid for image results */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .image-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+
+    .image-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--accent);
+    }
+
+    .image-card img {
+      width: 100%; height: 180px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-card-info {
+      padding: 10px 12px;
+    }
+
+    .image-card-score {
+      font-size: 13px; font-weight: 600;
+      color: var(--accent);
+    }
+
+    .image-card-path {
+      font-size: 11px; color: var(--text-muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    /* Text result list */
+    .text-feed { display: grid; gap: 10px; }
+
+    .text-item {
+      display: flex; gap: 14px;
+      padding: 16px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      transition: all var(--transition);
+    }
+
+    .text-item:hover {
+      border-color: var(--border-subtle);
+      background: var(--bg-hover);
+    }
+
+    .text-item-thumb {
+      width: 72px; height: 72px;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+      background: var(--bg-hover);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .text-item-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+    }
+
+    .text-item-meta {
+      font-size: 13px; color: var(--text-secondary);
+      display: flex; flex-direction: column; gap: 3px;
+      min-width: 0;
+    }
+
+    .text-item-meta strong {
+      color: var(--text-primary); font-weight: 500;
+    }
+
+    .mono {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .snippet {
+      font-size: 13px; color: var(--text-secondary);
+      margin-top: 4px; line-height: 1.5;
+    }
+
+    /* Split results for auto mode */
+    .results-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .results-split { grid-template-columns: 1fr; }
+    }
+
+    /* ── Sidebar ────────────────────────────────────────────────────── */
+    .sidebar {
+      position: sticky; top: 80px;
+      display: grid; gap: 16px;
+    }
+
+    @media (max-width: 1100px) {
+      .sidebar { position: static; }
+    }
+
+    .sidebar .card { padding: 20px; }
+
+    .check-row {
+      display: flex; gap: 10px; align-items: center;
+      margin-top: 10px;
+      font-size: 13px; color: var(--text-secondary);
+    }
+
+    .check-row input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 16px; height: 16px;
+    }
+
+    .hint {
+      font-size: 12px; color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* ── History ────────────────────────────────────────────────────── */
+    .history-list { display: grid; gap: 6px; }
+
+    .history-item {
+      display: flex; gap: 10px; align-items: center;
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      transition: background var(--transition);
+    }
+
+    .history-item:hover { background: var(--bg-hover); }
+
+    .history-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .history-text {
+      color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .history-kind {
+      font-weight: 600; color: var(--text-primary);
+      text-transform: uppercase; font-size: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); border: 0;
+    }
+
+    /* ── Loading Overlay ───────────────────────────────────────────── */
+    .loading-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      flex-direction: column;
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .loading-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 40px 56px;
+      text-align: center;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border-subtle);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-size: 15px; font-weight: 500; color: var(--text-primary);
+    }
+
+    .progress-bar {
+      width: 160px; height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 12px auto 0;
+    }
+
+    .progress-bar-inner {
+      height: 100%; width: 30%;
+      background: var(--accent);
+      border-radius: 2px;
+      animation: progress 1.2s ease-in-out infinite;
+    }
+
+    @keyframes progress {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(500%); }
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .material-icons-round {
+      font-size: 48px; margin-bottom: 12px;
+      opacity: .4;
+    }
+
+    /* ── Animations ─────────────────────────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-in {
+      animation: fadeInUp .4s ease forwards;
+    }
+
+    .animate-in-delay { animation-delay: .1s; opacity: 0; }
+  </style>
+</head>
+
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loadingText">Processing…</div>
+      <div class="progress-bar"><div class="progress-bar-inner"></div></div>
+    </div>
+  </div>
+
+  {% set initial_mode = search_kind if search_kind else 'text' %}
+
+  <!-- ── Topbar ─────────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-icon">FS</div>
+        <div>
+          <h1>FYSearch</h1>
+          <div class="brand-sub">Multimodal Forensic Search · Offline</div>
+        </div>
+      </div>
+
+      <div class="status-chips">
+        <div class="chip {% if has_text_index %}ready{% else %}missing{% endif %}">
+          <span class="material-icons-round" style="font-size:14px">{% if has_text_index %}check_circle{% else %}cancel{% endif %}</span>
+          Text Index
+        </div>
+        <div class="chip {% if has_image_index %}ready{% else %}missing{% endif %}">
+          <span class="material-icons-round" style="font-size:14px">{% if has_image_index %}check_circle{% else %}cancel{% endif %}</span>
+          Image Index
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Page ───────────────────────────────────────────────────── -->
+  <div class="page">
+    {% if error %}
+    <div class="banner error">
+      <span class="material-icons-round">error</span>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    {% if message %}
+    <div class="banner ok">
+      <span class="material-icons-round">check_circle</span>
+      {{ message }}
+    </div>
+    {% endif %}
+
+    <div class="layout">
+      <main>
+        <!-- Hero -->
+        <div class="hero animate-in">
+          <div class="hero-title">FYSearch</div>
+          <div class="hero-sub">Search images, PDFs & documents — fully offline, CPU-powered</div>
+
+          <div class="tabs" role="tablist">
+            <button class="tab" id="tab-text" type="button" role="tab"
+              aria-selected="{% if initial_mode == 'text' %}true{% else %}false{% endif %}">
+              <span class="material-icons-round">text_fields</span>
+              Text Search
+            </button>
+            <button class="tab" id="tab-image" type="button" role="tab"
+              aria-selected="{% if initial_mode == 'image' %}true{% else %}false{% endif %}">
+              <span class="material-icons-round">image_search</span>
+              Image Search
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Panel -->
+        <div class="search-card animate-in animate-in-delay">
+          <!-- Text Search -->
+          <div id="panel-text" role="tabpanel" {% if initial_mode != 'text' %}hidden{% endif %}>
+            <form method="post" action="/search/text" id="textSearchForm">
+              <div class="searchbar">
+                <input id="query" name="query" type="text" value="{{ query }}"
+                  placeholder="Search for anything…" autocomplete="off" />
+                <button class="btn btn-primary" type="submit" id="searchTextBtn">
+                  <span class="material-icons-round">search</span>
+                  Search
+                </button>
+              </div>
+
+              <details>
+                <summary>Advanced Options</summary>
+                <div class="advanced-grid">
+                  <div>
+                    <label for="modalitySelect">Search Mode</label>
+                    <select name="modality" id="modalitySelect">
+                      <option value="auto" {% if modality=='auto' %}selected{% endif %}>Auto (Smart)</option>
+                      <option value="text" {% if modality=='text' %}selected{% endif %}>Text → Text</option>
+                      <option value="image" {% if modality=='image' %}selected{% endif %}>Text → Image</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="topKInput">Results</label>
+                    <input name="top_k" id="topKInput" type="number" min="1" max="50" value="{{ top_k }}" />
+                  </div>
+                </div>
+              </details>
+            </form>
+          </div>
+
+          <!-- Image Search -->
+          <div id="panel-image" role="tabpanel" {% if initial_mode != 'image' %}hidden{% endif %}>
+            <form id="imageForm" method="post" action="/search/image" enctype="multipart/form-data">
+              <div class="dropzone" id="dropzone" tabindex="0">
+                <span class="material-icons-round dropzone-icon">cloud_upload</span>
+                <div class="dropzone-title">Drop an image here</div>
+                <div class="dropzone-hint">Or click to browse · Paste from clipboard (Ctrl+V)</div>
+                <img id="preview" class="preview-img" alt="Preview" {% if last_uploaded_filename %}
+                  src="/upload/{{ last_uploaded_filename }}" style="display:block;" {% endif %} />
+                <div id="dzStatus" class="preview-status">
+                  {% if last_uploaded_filename %}Image loaded{% endif %}
+                </div>
+              </div>
+
+              <input class="sr-only" id="imageInput" name="image" type="file" accept="image/*" />
+
+              <details>
+                <summary>Advanced Options</summary>
+                <div class="advanced-grid">
+                  <div>
+                    <label for="imgTopK">Results</label>
+                    <input name="top_k" id="imgTopK" type="number" min="1" max="50" value="{{ top_k }}" />
+                  </div>
+                </div>
+              </details>
+
+              <button class="btn btn-primary btn-block" type="submit" style="margin-top: 16px;" id="searchImageBtn">
+                <span class="material-icons-round">image_search</span>
+                Search by Image
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ── Results ─────────────────────────────────────────────── -->
+        {% if text_results %}
+        <div class="card animate-in" style="margin-bottom: 20px;">
+          <div class="results-header">
+            <div class="results-title">
+              <span class="material-icons-round" style="color: var(--accent);">description</span>
+              {% if modality == 'image' %}Image Results{% else %}Text Results{% endif %}
+            </div>
+            <span class="results-count">{{ text_results|length }}</span>
+          </div>
+          {% if modality == 'image' %}
+          <!-- text→image search: show as image grid -->
+          <div class="image-grid">
+            {% for r in text_results %}
+            <a href="/doc/{{ r.doc_id }}" target="_blank" style="text-decoration:none;">
+              <div class="image-card">
+                <img src="/doc/{{ r.doc_id }}" alt="result" loading="lazy" />
+                <div class="image-card-info">
+                  <div class="image-card-score">{{ "%.4f"|format(r.score) }}</div>
+                  {% if r.page %}<div class="image-card-path">Page {{ r.page }}</div>{% endif %}
+                  <div class="image-card-path" title="{{ r.original_path }}">{{ r.original_path }}</div>
+                </div>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+          {% else %}
+          <!-- text→text search: show as text feed -->
+          <div class="text-feed">
+            {% for r in text_results %}
+            <a href="/doc/{{ r.doc_id }}" target="_blank" style="text-decoration:none; color:inherit;">
+              <div class="text-item">
+                <div class="text-item-thumb">
+                  {% if r.media_type != 'pdf' %}
+                  <img src="/doc/{{ r.doc_id }}" alt="thumbnail" loading="lazy" />
+                  {% else %}
+                  <span class="material-icons-round" style="font-size:28px; color: var(--text-muted);">picture_as_pdf</span>
+                  {% endif %}
+                </div>
+                <div class="text-item-meta">
+                  <div><strong>Score:</strong> {{ "%.4f"|format(r.score) }}</div>
+                  {% if r.page %}<div><strong>Page:</strong> {{ r.page }}</div>{% endif %}
+                  {% if r.method %}<div><strong>Method:</strong> {{ r.method }}</div>{% endif %}
+                  <div class="mono">{{ r.original_path }}</div>
+                  {% if r.snippet %}<div class="snippet">{{ r.snippet }}</div>{% endif %}
+                </div>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if image_results %}
+        <div class="card animate-in" style="margin-bottom: 20px;">
+          <div class="results-header">
+            <div class="results-title">
+              <span class="material-icons-round" style="color: var(--cyan);">image</span>
+              Image Results
+            </div>
+            <span class="results-count">{{ image_results|length }}</span>
+          </div>
+          <div class="image-grid">
+            {% for r in image_results %}
+            <a href="/doc/{{ r.doc_id }}" target="_blank" style="text-decoration:none;">
+              <div class="image-card">
+                <img src="/doc/{{ r.doc_id }}" alt="result" loading="lazy" />
+                <div class="image-card-info">
+                  <div class="image-card-score">{{ "%.4f"|format(r.score) }}</div>
+                  {% if r.page %}<div class="image-card-path">Page {{ r.page }}</div>{% endif %}
+                  <div class="image-card-path" title="{{ r.original_path }}">{{ r.original_path }}</div>
+                </div>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if not text_results and not image_results and query %}
+        <div class="card animate-in">
+          <div class="empty-state">
+            <span class="material-icons-round">search_off</span>
+            <div>No results found for "{{ query }}"</div>
+          </div>
+        </div>
+        {% endif %}
+      </main>
+
+      <!-- ── Sidebar ────────────────────────────────────────────── -->
+      <aside class="sidebar">
+        <!-- Dataset Config -->
+        <div class="card">
+          <div class="card-title">
+            <span class="material-icons-round">folder_open</span>
+            Dataset
+          </div>
+          <form method="post" action="/dataset" id="datasetForm">
+            <label for="datasetPathInput">Folder Path</label>
+            <input name="dataset_path" id="datasetPathInput" type="text" value="{{ dataset_path }}"
+              placeholder="C:\Users\...\Pictures or /mnt/c/..." />
+
+            <div class="check-row">
+              <input name="run_pipeline" id="runPipelineCheck" type="checkbox" checked />
+              <label for="runPipelineCheck" style="margin:0; text-transform:none; letter-spacing:0; font-size:13px;">
+                Run full pipeline (ingest + extract + build indexes)
+              </label>
+            </div>
+            <div class="hint">⏱️ ~1-4 sec per file depending on type</div>
+
+            <button class="btn btn-primary btn-block" type="submit" style="margin-top: 14px;" id="applyDatasetBtn">
+              Apply
+            </button>
+          </form>
+        </div>
+
+        <!-- Build Indexes -->
+        <div class="card">
+          <div class="card-title">
+            <span class="material-icons-round">build</span>
+            Build Indexes
+          </div>
+          <div class="hint" style="margin-bottom:14px">
+            Rebuild indexes after adding new files
+          </div>
+          <form method="post" action="/build-index" style="margin-bottom: 10px;" id="buildImageForm">
+            <input type="hidden" name="modality" value="image" />
+            <button class="btn btn-primary btn-block" type="submit" id="buildImageBtn">
+              <span class="material-icons-round">image</span>
+              Build Image Index
+            </button>
+            <div class="hint" style="text-align:center">~4 sec per image</div>
+          </form>
+          <form method="post" action="/build-index" id="buildTextForm">
+            <input type="hidden" name="modality" value="text" />
+            <button class="btn btn-secondary btn-block" type="submit" id="buildTextBtn">
+              <span class="material-icons-round">text_fields</span>
+              Build Text Index
+            </button>
+            <div class="hint" style="text-align:center">~2 sec per document</div>
+          </form>
+        </div>
+
+        <!-- History -->
+        <div class="card">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px;">
+            <div class="card-title" style="margin-bottom:0">
+              <span class="material-icons-round">history</span>
+              History
+            </div>
+            <form method="post" action="/history/clear" id="clearHistoryForm">
+              <button class="btn btn-secondary" type="submit" style="padding:6px 14px; font-size:12px;" id="clearHistoryBtn">
+                Clear
+              </button>
+            </form>
+          </div>
+
+          {% if history and history|length > 0 %}
+          <div class="history-list">
+            {% for h in history %}
+            <div class="history-item">
+              <div class="history-dot"></div>
+              <div style="min-width:0;">
+                <div class="history-kind">{{ h.kind }}</div>
+                <div class="history-text">
+                  {% if h.kind == 'text' %}{{ h.query_text }}{% else %}{{ h.uploaded_path }}{% endif %}
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="hint">No searches yet</div>
+          {% endif %}
+        </div>
+
+        <!-- Reset -->
+        <div class="card">
+          <div class="card-title">
+            <span class="material-icons-round">restart_alt</span>
+            Reset
+          </div>
+          <form method="post" action="/reset" id="resetForm">
+            <div class="check-row">
+              <input name="confirm" id="resetConfirm" type="checkbox" />
+              <label for="resetConfirm" style="margin:0; text-transform:none; letter-spacing:0; font-size:13px;">
+                I understand this deletes all local data
+              </label>
+            </div>
+            <button class="btn btn-danger btn-block" type="submit" style="margin-top: 12px;" id="resetBtn">
+              Reset All Data
+            </button>
+          </form>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ── Script ─────────────────────────────────────────────────── -->
+  <script>
+    (function () {
+      'use strict';
+
+      const serverMode = "{{ initial_mode }}";
+      const searchKind = "{{ search_kind }}";
+
+      const tabText = document.getElementById('tab-text');
+      const tabImage = document.getElementById('tab-image');
+      const panelText = document.getElementById('panel-text');
+      const panelImage = document.getElementById('panel-image');
+      const queryInput = document.getElementById('query');
+      const dropzone = document.getElementById('dropzone');
+      const imageInput = document.getElementById('imageInput');
+      const preview = document.getElementById('preview');
+      const statusEl = document.getElementById('dzStatus');
+
+      /* ── Tab switching ──────────────────────────────────────── */
+      function setMode(mode) {
+        const isText = mode === 'text';
+        tabText.setAttribute('aria-selected', String(isText));
+        tabImage.setAttribute('aria-selected', String(!isText));
+        panelText.hidden = !isText;
+        panelImage.hidden = isText;
+        try { localStorage.setItem('fysearch.mode', mode); } catch (e) {}
+        if (isText && queryInput) setTimeout(() => queryInput.focus(), 50);
+      }
+
+      tabText?.addEventListener('click', () => setMode('text'));
+      tabImage?.addEventListener('click', () => setMode('image'));
+
+      // If server says which search was done, respect it.
+      // Otherwise (fresh page load), use localStorage preference.
+      let initial;
+      if (searchKind) {
+        initial = searchKind;
+      } else {
+        initial = 'text';
+        try {
+          const saved = localStorage.getItem('fysearch.mode');
+          if (saved === 'image' || saved === 'text') initial = saved;
+        } catch (e) {}
+      }
+      setMode(initial);
+
+      /* ── Dropzone ───────────────────────────────────────────── */
+      function setStatus(msg) {
+        if (statusEl) statusEl.textContent = msg || '';
+      }
+
+      function setPreview(file) {
+        if (!preview) return;
+        if (!file) { preview.style.display = 'none'; preview.src = ''; return; }
+        const url = URL.createObjectURL(file);
+        preview.src = url;
+        preview.style.display = 'block';
+      }
+
+      function setFileInput(file) {
+        if (!imageInput || !file) return;
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        imageInput.files = dt.files;
+        setPreview(file);
+        setStatus(`Ready: ${file.name} (${Math.round(file.size / 1024)} KB)`);
+      }
+
+      if (dropzone && imageInput) {
+        dropzone.addEventListener('click', () => imageInput.click());
+
+        imageInput.addEventListener('change', () => {
+          const f = imageInput.files?.[0];
+          if (f) setFileInput(f);
+        });
+
+        dropzone.addEventListener('dragover', e => {
+          e.preventDefault();
+          dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+
+        dropzone.addEventListener('drop', e => {
+          e.preventDefault();
+          dropzone.classList.remove('dragover');
+          const f = e.dataTransfer?.files?.[0];
+          if (f) setFileInput(f);
+        });
+
+        // Global paste handler for images
+        document.addEventListener('paste', e => {
+          // Only handle if image tab is active
+          if (panelImage?.hidden) return;
+          const items = e.clipboardData?.items || [];
+          for (const it of items) {
+            if (it.type?.startsWith('image/')) {
+              const f = it.getAsFile();
+              if (f) { setFileInput(f); e.preventDefault(); return; }
+            }
+          }
+        });
+      }
+
+      /* ── Loading overlay ────────────────────────────────────── */
+      const overlay = document.getElementById('loadingOverlay');
+      const loadingText = document.getElementById('loadingText');
+
+      const messages = {
+        '/search/text': 'Searching…',
+        '/search/image': 'Analyzing image…',
+        '/dataset': 'Processing dataset… This may take a few minutes.',
+        '/build-index': 'Building index… Using all CPU cores.',
+        '/reset': 'Resetting…',
+        '/history/clear': 'Clearing…',
+      };
+
+      document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', () => {
+          const action = form.getAttribute('action') || '';
+          if (overlay) {
+            if (loadingText) loadingText.textContent = messages[action] || 'Processing…';
+            overlay.classList.add('active');
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+
+</html>
