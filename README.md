@@ -1,5 +1,7 @@
 # FYSearch
 
+[Report.pdf](https://github.com/rachit9876/fysearch/blob/main/Documentation/report.pdf)
+
 > **A fully offline, CPU-only multimodal forensic search engine.**
 > Point it at a folder of images, PDFs, or documents — then search by text *or* by uploading an image. Everything stays on your machine. No cloud, no GPU, no internet required.
 
